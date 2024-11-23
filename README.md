@@ -158,7 +158,7 @@ jobs:
 
       - name: Deploy to server
         run: |
-          ssh -o StrictHostKeyChecking=no ubuntu@65.2.175.160 "cd /var/www/html && git pull origin main && sudo systemctl restart nginx"
+          ssh -o StrictHostKeyChecking=no ubuntu@65.2.175.160 "cd /var/www/html && sudo git pull origin main && sudo systemctl restart nginx"
 ```
 
 ### 3. Trigger Deployment
