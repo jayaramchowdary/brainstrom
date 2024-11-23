@@ -1,230 +1,170 @@
-# WordPress Automated Deployment with GitHub Actions and LEMP Stack
+# Automated WordPress Deployment with Nginx (LEMP Stack) and GitHub Actions
 
-This project demonstrates an automated deployment process for a WordPress website using AWS, the LEMP stack (Linux, Nginx, MySQL, PHP), and GitHub Actions for CI/CD.
-
+This project automates the deployment of a WordPress website on a Virtual Private Server (VPS) using the LEMP (Linux, Nginx, MySQL, PHP) stack and GitHub Actions for CI/CD automation. It ensures the website is secured, optimized for performance, and easy to deploy.
 
 ## Prerequisites
 
-1. **AWS EC2 Instance**:
-   - Ubuntu 22.04 LTS
-   - Minimum 2 vCPUs, 4 GB RAM
-2. **GitHub Repository**:
-   - For version control and workflow automation.
-3. **Domain Name**:
-   - Register a domain or use a free service like [No-IP](https://www.noip.com/).
-4. **GitHub Secrets**:
-   - Store sensitive information like server IP, username, and password.
-
----
+- **Cloud Server**: AWS EC2 instance with Ubuntu 22.04.
+- **GitHub Account**: To manage the repository and GitHub Actions workflow.
+- **Domain Name**: A registered domain name pointing to the EC2 instance IP. You can use a service like [NoIP](https://www.noip.com/) for a free temporary hostname.
+- **SSH Access**: Ensure SSH access to your EC2 instance is configured.
 
 ## Server Provisioning
 
-1. **Provision an EC2 Instance**:
-   - Launch an Ubuntu 22.04 instance.
-   - Open the necessary ports (22, 80, 443) in the security group.
-   - Access the server via SSH.
+### 1. Provision a VPS with AWS EC2
 
-2. **Secure the Server**:
-   ```bash
-   sudo apt update && sudo apt upgrade -y
-   sudo ufw allow OpenSSH
-   ```
+- Sign in to [AWS](https://aws.amazon.com/).
+- Launch an EC2 instance with Ubuntu 22.04.
+- Assign an Elastic IP to the instance to ensure a static IP.
+- Set up security groups to allow HTTP (80), HTTPS (443), and SSH (22) traffic.
+- SSH into the instance:
+  ```bash
+  ssh -i wordpress.pem ubuntu@65.2.175.160
+  ```
 
----
+### 2. Install Dependencies
 
-## LEMP Stack Installation
+On your EC2 instance, update the package list and install the necessary software for the LEMP stack.
 
-1. **Install Nginx**:
-   ```bash
-   sudo apt install nginx -y
-   sudo systemctl start nginx
-   sudo systemctl enable nginx
-   ```
-
-2. **Install MySQL**:
-   ```bash
-   sudo apt install mysql-server -y
-   sudo mysql_secure_installation
-   ```
-
-3. **Install PHP**:
-   ```bash
-   sudo apt install php-fpm php-mysql -y
-   ```
-
-4. **Verify Setup**:
-   Create a test PHP file:
-   ```bash
-   echo "<?php phpinfo(); ?>" | sudo tee /var/www/html/info.php
-   ```
-   Visit `http://65.0.18.235/info.php` to confirm PHP is working.
-
----
-
-## WordPress Configuration
-
-1. **Download WordPress**:
-   ```bash
-   wget https://wordpress.org/latest.tar.gz
-   tar -xvf latest.tar.gz
-   sudo mv wordpress /var/www/html/
-   ```
-
-2. **Set Up the Database**:
-   ```bash
-   sudo mysql -u root -p
-   ```
-
-   Run the following SQL commands:
-   ```sql
-   CREATE DATABASE wordpress_db;
-   CREATE USER 'wordpress_user'@'localhost' IDENTIFIED BY 'your_password';
-   GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress_user'@'localhost';
-   FLUSH PRIVILEGES;
-   EXIT;
-   ```
-
-3. **Configure WordPress**:
-   ```bash
-   sudo cp /var/www/html/wordpress/wp-config-sample.php /var/www/html/wordpress/wp-config.php
-   sudo nano /var/www/html/wordpress/wp-config.php
-   ```
-   Update the database credentials:
-   ```php
-   define( 'DB_NAME', 'wordpress_db' );
-   define( 'DB_USER', 'wordpress_user' );
-   define( 'DB_PASSWORD', 'your_password' );
-   ```
-
-4. **Set Permissions**:
-   ```bash
-   sudo chown -R www-data:www-data /var/www/html/wordpress
-   sudo chmod -R 755 /var/www/html/wordpress
-   ```
-
----
-
-## Securing the Website with SSL
-
-1. **Install Certbot**:
-   ```bash
-   sudo apt install certbot python3-certbot-nginx -y
-   ```
-
-2. **Obtain SSL Certificate**:
-   ```bash
-   sudo certbot --nginx -d lempwordpress.ddns.net
-   ```
-
-3. **Verify Renewal**:
-   ```bash
-   sudo certbot renew --dry-run
-   ```
-
----
-
-## Nginx Optimization
-
-Edit the Nginx configuration file for WordPress:
 ```bash
-sudo nano /etc/nginx/sites-available/wordpress
+sudo apt update
+sudo apt install php-fpm php-mysql mysql-server nginx unzip wget curl
 ```
 
-Add the following:
+### 3. Configure Nginx to Serve WordPress
+
+Replace the default Nginx configuration:
+
+```bash
+cd /etc/nginx/sites-available
+sudo rm default
+sudo nano default
+```
+
+Add the following configuration:
+
 ```nginx
 server {
     listen 80;
-    server_name lempwordpress.ddns.net;
+    server_name 65.2.175.160;
 
-    root /var/www/html/wordpress;
+    root /var/www/html;
     index index.php index.html index.htm;
 
     location / {
-        try_files $uri $uri/ /index.php$is_args$args;
+        try_files $uri $uri/ =404;
     }
 
     location ~ \.php$ {
         include snippets/fastcgi-php.conf;
         fastcgi_pass unix:/var/run/php/php8.1-fpm.sock;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        include fastcgi_params;
     }
-
-    location ~ /\.ht {
-        deny all;
-    }
-
-    gzip on;
-    gzip_types text/plain text/css application/json application/javascript text/xml application/xml application/xml+rss text/javascript;
 }
 ```
 
-Enable the configuration and reload Nginx:
+Restart Nginx:
+
 ```bash
-sudo ln -s /etc/nginx/sites-available/wordpress /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl reload nginx
+sudo systemctl restart nginx.service
 ```
 
----
+## Website Configuration
 
-## GitHub Actions Workflow
+### 1. Download and Set Up WordPress
 
-1. **Create Workflow File**:
-   Add `.github/workflows/deploy.yml`:
-   ```yaml
-   name: Deploy WordPress
+- Navigate to `/var/www/html` and download WordPress:
+  ```bash
+  cd /var/www/html
+  sudo wget https://wordpress.org/latest.zip
+  sudo unzip latest.zip
+  sudo rm latest.zip
+  sudo mv wordpress/* .
+  sudo chown -R www-data:www-data *
+  ```
 
-    on:
-    push:
-        branches:
-        - main
+### 2. Secure MySQL Installation
 
-    jobs:
-    deploy:
-        runs-on: ubuntu-latest
+Run the MySQL secure installation script:
 
-        steps:
-        # Checkout the code
-        - name: Checkout code
-            uses: actions/checkout@v3
+```bash
+sudo mysql_secure_installation
+```
 
-        # Set up SSH
-        - name: Setup SSH
-            uses: webfactory/ssh-agent@v0.5.3
-            with:
-            ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+### 3. Set Up Database and User
 
-        # Deploy to server using SSH
-        - name: Deploy to server
-            env:
-            SERVER_IP: ${{ secrets.SERVER_IP }}
-            SERVER_USER: ${{ secrets.SERVER_USER }}
-            run: |
-            ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP << 'EOF'
-            cd /var/www/html
-            git pull origin main
-            sudo systemctl reload nginx
-            EOF
-   ```
+Access MySQL and create the WordPress database and user:
 
-2. **Add Secrets**:
-   - `SERVER_IP`: Public IP of the EC2 instance.
-   - `SERVER_USER`: SSH username.
-   - `SERVER_PASSWORD`: SSH password.
+```bash
+sudo mysql
+CREATE DATABASE wordpress_db;
+CREATE USER 'wordpress_user'@'localhost' IDENTIFIED BY 'P@55word';
+GRANT ALL PRIVILEGES ON wordpress_db.* TO 'wordpress_user'@'localhost';
+QUIT;
+```
 
----
+## SSL/TLS Certificate Implementation
 
-## Deployment Steps
+### 1. Install Certbot for SSL
 
-1. Push changes to `main`:
-   ```bash
-   git add .
-   git commit -m "Update WordPress"
-   git push origin main
-   ```
+Install Certbot and the Nginx plugin:
 
-2. GitHub Actions will handle deployment.
----
+```bash
+sudo apt install certbot python3-certbot-nginx
+```
 
-### Deployment URL
+Obtain and install the SSL certificate:
 
-Access the live website: [https://lempwordpress.ddns.net](lempwordpress.ddns.net)
+```bash
+sudo certbot --nginx -d lempwordpress.ddns.net
+```
+
+This will automatically configure SSL for Nginx, redirect HTTP to HTTPS, and configure the SSL certificate for your domain.
+
+### 2. Verify SSL Installation
+
+After completing the Certbot process, visit `lempwordpress.ddns.net` to verify the SSL certificate is installed and working.
+
+## GitHub Actions CI/CD Setup
+
+### 1. Create a GitHub Repository
+
+- Create a new repository on GitHub and push your local code to it.
+
+### 2. Set Up GitHub Actions Workflow
+
+Create the `.github/workflows/deploy.yml` file for automated deployment.
+
+```yaml
+name: Deploy WordPress
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v2
+
+      - name: Set up SSH keys
+        uses: webfactory/ssh-agent@v0.5.3
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Deploy to server
+        run: |
+          ssh -o StrictHostKeyChecking=no ubuntu@65.2.175.160 "cd /var/www/html && git pull origin main && sudo systemctl restart nginx"
+```
+
+### 3. Trigger Deployment
+
+Push changes to the `main` branch to trigger the GitHub Actions workflow, automatically deploying updates to your WordPress site.
+
+## Conclusion
+
+This setup provides a fully automated WordPress deployment process using the LEMP stack, GitHub Actions, and best practices for security and performance optimization. Follow the steps to set up your VPS, configure the LEMP stack, automate deployments using GitHub Actions, and secure your website with SSL.

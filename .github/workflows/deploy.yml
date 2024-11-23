@@ -8,26 +8,15 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
     steps:
-      # Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v3
+      - name: Checkout repository
+        uses: actions/checkout@v2
 
-      # Set up SSH
-      - name: Setup SSH
+      - name: Set up SSH keys
         uses: webfactory/ssh-agent@v0.5.3
         with:
           ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      # Deploy to server using SSH
       - name: Deploy to server
-        env:
-          SERVER_IP: ${{ secrets.SERVER_IP }}
-          SERVER_USER: ${{ secrets.SERVER_USER }}
         run: |
-          ssh -o StrictHostKeyChecking=no $SERVER_USER@$SERVER_IP << 'EOF'
-          cd /var/www/html
-          git pull origin main
-          sudo systemctl reload nginx
-          EOF
+          ssh -o StrictHostKeyChecking=no ubuntu@your-ec2-public-ip "cd /var/www/html && git pull origin main && sudo systemctl restart nginx"
